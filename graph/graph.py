@@ -1,26 +1,22 @@
 from dotenv import load_dotenv
-
+from langgraph.checkpoint.memory import MemorySaver
+# from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
-from graph.state import GraphState
-from graph.consts import RETRIEVE, GENERATE, GRADE_DOCUMENTS, WEBSEARCH
-from graph.nodes import retrieve, grade_documents, web_search, generate
-from graph.chains.router import RouteQuery, question_router
+
 from graph.chains.answer_grader import answer_grader
 from graph.chains.hallucination_grader import hallucination_grader
+from graph.chains.router import question_router, RouteQuery
+from graph.consts import GENERATE, GRADE_DOCUMENTS, RETRIEVE, WEBSEARCH
+from graph.nodes.retrieve import retrieve
+from graph.nodes.generate import generate
+from graph.nodes.grade_documents import grade_documents
+from graph.nodes.web_search import web_search
+from graph.state import GraphState
 
+load_dotenv()
+# memory = SqliteSaver.from_conn_string(":memory:")
+# memory = MemorySaver()
 
-
-def route_question(state: GraphState) -> str:
-    print("---ROUTE QUESTION---")
-    question = state["question"]
-    source: RouteQuery = question_router.invoke({"question": question})
-    
-    if source.datasource == "websearch":
-        print("---ROUTE QUESTION TO WEB SEARCH---")
-        return WEBSEARCH
-    elif source.datasource == "vectorstore":
-        print("---ROUTE QUESTION TO RAG---")
-        return RETRIEVE
 
 def decide_to_generate(state):
     print("---ASSESS GRADED DOCUMENTS---")
@@ -33,8 +29,8 @@ def decide_to_generate(state):
     else:
         print("---DECISION: GENERATE---")
         return GENERATE
-    
-    
+
+
 def grade_generation_grounded_in_documents_and_question(state: GraphState) -> str:
     print("---CHECK HALLUCINATIONS---")
     question = state["question"]
@@ -58,35 +54,44 @@ def grade_generation_grounded_in_documents_and_question(state: GraphState) -> st
     else:
         print("---DECISION: GENERATION IS NOT GROUNDED IN DOCUMENTS, RE-TRY---")
         return "not supported"
-    
+
+
+def route_question(state: GraphState) -> str:
+    print("---ROUTE QUESTION---")
+    question = state["question"]
+    source: RouteQuery = question_router.invoke({"question": question})
+    if source.datasource == "websearch":
+        print("---ROUTE QUESTION TO WEB SEARCH---")
+        return WEBSEARCH
+    elif source.datasource == "vectorstore":
+        print("---ROUTE QUESTION TO RAG---")
+        return RETRIEVE
+
 
 workflow = StateGraph(GraphState)
 workflow.add_node(RETRIEVE, retrieve)
 workflow.add_node(GRADE_DOCUMENTS, grade_documents)
-workflow.add_node(WEBSEARCH, web_search)
 workflow.add_node(GENERATE, generate)
+workflow.add_node(WEBSEARCH, web_search)
+
 
 workflow.set_conditional_entry_point(
     route_question,
     path_map={
         WEBSEARCH: WEBSEARCH,
-        RETRIEVE: RETRIEVE
-    }
+        RETRIEVE: RETRIEVE,
+    },
 )
-
 workflow.add_edge(RETRIEVE, GRADE_DOCUMENTS)
-
 workflow.add_conditional_edges(
     GRADE_DOCUMENTS,
     decide_to_generate,
-    path= {
+    path_map={
         WEBSEARCH: WEBSEARCH,
-        GENERATE: GENERATE
-    }
+        GENERATE: GENERATE,
+    },
 )
-
 workflow.add_edge(WEBSEARCH, GENERATE)
-
 workflow.add_conditional_edges(
     GENERATE,
     grade_generation_grounded_in_documents_and_question,
