@@ -13,7 +13,14 @@ AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 OPENAI_API_VERSION = os.getenv("OPENAI_API_VERSION")
 OPENAI_AZURE_ENDPOINT = os.getenv("OPENAI_AZURE_ENDPOINT")
 
-llm = AzureChatOpenAI(temperature=0, stop=["\nObservation"], model=OPENAI_MODEL, api_key=AZURE_OPENAI_API_KEY, api_version=OPENAI_API_VERSION, azure_endpoint=OPENAI_AZURE_ENDPOINT)
+llm = AzureChatOpenAI(
+    temperature=0,
+    stop=["\nObservation"],
+    model=OPENAI_MODEL,
+    api_key=AZURE_OPENAI_API_KEY,
+    api_version=OPENAI_API_VERSION,
+    azure_endpoint=OPENAI_AZURE_ENDPOINT,
+)
 
 
 class GradeHallucinations(BaseModel):

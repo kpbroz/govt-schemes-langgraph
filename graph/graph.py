@@ -6,11 +6,12 @@ from langgraph.graph import END, StateGraph
 from graph.chains.answer_grader import answer_grader
 from graph.chains.hallucination_grader import hallucination_grader
 from graph.chains.router import question_router, RouteQuery
-from graph.consts import GENERATE, GRADE_DOCUMENTS, RETRIEVE, WEBSEARCH
+from graph.consts import RELEVANCE, GENERATE, GRADE_DOCUMENTS, RETRIEVE, WEBSEARCH
 from graph.nodes.retrieve import retrieve
 from graph.nodes.generate import generate
 from graph.nodes.grade_documents import grade_documents
 from graph.nodes.web_search import web_search
+from graph.nodes.grade_relevance import grade_relevance
 from graph.state import GraphState
 
 load_dotenv()
@@ -57,31 +58,44 @@ def grade_generation_grounded_in_documents_and_question(state: GraphState) -> st
 
 
 def route_question(state: GraphState) -> str:
-    print("---ROUTE QUESTION---")
     question = state["question"]
-    source: RouteQuery = question_router.invoke({"question": question})
-    if source.datasource == "websearch":
-        print("---ROUTE QUESTION TO WEB SEARCH---")
-        return WEBSEARCH
-    elif source.datasource == "vectorstore":
-        print("---ROUTE QUESTION TO RAG---")
-        return RETRIEVE
+    relevant = state["relevant"]
+    
+    if relevant == True:
+        print("---QUESTION IS RELEVANT---")
+        print("---ROUTE QUESTION---")
+        source: RouteQuery = question_router.invoke({"question": question})
+        if source.datasource == "websearch":
+            print("---ROUTE QUESTION TO WEB SEARCH---")
+            return WEBSEARCH
+        elif source.datasource == "vectorstore":
+            print("---ROUTE QUESTION TO RAG---")
+            return RETRIEVE
+    else:
+        print("---QUESTION IS NOT RELEVANT---")
+        return END
+
 
 
 workflow = StateGraph(GraphState)
+workflow.add_node(RELEVANCE, grade_relevance)
 workflow.add_node(RETRIEVE, retrieve)
 workflow.add_node(GRADE_DOCUMENTS, grade_documents)
 workflow.add_node(GENERATE, generate)
 workflow.add_node(WEBSEARCH, web_search)
 
 
-workflow.set_conditional_entry_point(
-    route_question,
-    path_map={
-        WEBSEARCH: WEBSEARCH,
-        RETRIEVE: RETRIEVE,
-    },
-)
+workflow.set_entry_point(RELEVANCE)
+
+workflow.add_conditional_edges(RELEVANCE, 
+                               route_question,
+                               path_map={
+                                WEBSEARCH: WEBSEARCH,
+                                RETRIEVE: RETRIEVE,
+                                END: END,
+                               })
+
+
 workflow.add_edge(RETRIEVE, GRADE_DOCUMENTS)
 workflow.add_conditional_edges(
     GRADE_DOCUMENTS,
