@@ -4,7 +4,7 @@ import requests
 # Backend API URL
 API_URL = "http://127.0.0.1:8000/ask/"
 
-st.title("Interactive Query Assistant")
+st.title("Govt schemes assistant")
 st.write("Ask me anything!")
 
 # Input box
@@ -16,7 +16,7 @@ if st.button("Submit"):
         response = requests.post(API_URL, json={"question": user_query})
         if response.status_code == 200:
             res_json = response.json()
-            st.success(f"Response: {res_json['response']}")
+            st.success(f"{res_json['response']}")
         else:
             st.error("Error communicating with backend.")
     else:
